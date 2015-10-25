@@ -2,6 +2,7 @@
 Code to pull data from PGE and Sungevity and Push to PVOutput so you can see both, your solar production and usage on same place.
 
 Steps to use
+
 1. Make sure you can login into your PG&E account and have your username, password. (http://www.pge.com/)
 2. Make sure you can login into your Sungevity account and have your username, password. (https://star.oursungevity.com/login)
 3. Create an account at PVOutput.org if you don't have it already. (http://pvoutput.org/register.jsp)
