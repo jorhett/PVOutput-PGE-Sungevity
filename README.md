@@ -15,4 +15,6 @@ Steps to use
 
 That's it. Then you can run com.droidbytes.RecordPVOutput. 
 
+Check the wiki at https://github.com/qwertangel/PVOutput-PGE-Sungevity/wiki
+
 
