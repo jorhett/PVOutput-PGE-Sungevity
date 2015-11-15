@@ -6,6 +6,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -25,6 +26,7 @@ import org.apache.http.client.ClientProtocolException;
 
 import com.droidbytes.beans.EnergyForDay;
 import com.droidbytes.pge.PGEDataParser;
+import com.droidbytes.util.PVProperties;
 import com.gargoylesoftware.htmlunit.BrowserVersion;
 import com.gargoylesoftware.htmlunit.HttpMethod;
 import com.gargoylesoftware.htmlunit.UnexpectedPage;
@@ -38,26 +40,83 @@ import com.gargoylesoftware.htmlunit.html.HtmlSubmitInput;
 import com.gargoylesoftware.htmlunit.html.HtmlTextInput;
 import com.gargoylesoftware.htmlunit.util.NameValuePair;
 
+/**
+ * @author maggarwal
+ *
+ */
 public class GetPGEData {
 
-	public static String folderName = "/tmp/pgeData";
-	public static final String pgeElectricUsageFilePrefix = "pge_electric";
-	
-	public static EnergyForDay getUsage(String username, String password, Date dateOfUse, String tempFolder) throws MalformedURLException, IOException, NumberFormatException, ParseException {
+	public static String Folder_Name = "/tmp/pgeData";
+	public static final String Pge_Electric_Usage_File_Prefix = "pge_electric";
+	private static WebClient Web_Client = null;
+	private static URL File_Download_Url = null;
+	private static HtmlPage downloadPage = null;
 
-		String zipFile = downloadPGEData(username, password, dateOfUse);
-		String electricUsage = parsePgeData(zipFile);
-		EnergyForDay production = PGEDataParser.parseFile(electricUsage);
-		if (null != tempFolder) {
-			folderName = tempFolder;
-		}
-		FileUtils.deleteQuietly(new File(folderName));
-		return production;
-		
+	/**
+	 * @throws IOException
+	 */
+	private static void init() throws IOException {
+
+		String user = PVProperties.getProperty("pgeUserName");
+		String password = PVProperties.getProperty("pgePassword");
+
+		Web_Client = new WebClient(BrowserVersion.INTERNET_EXPLORER_11);
+		Logger.getLogger("com.gargoylesoftware.htmlunit").setLevel(
+				java.util.logging.Level.OFF);
+		Logger.getLogger("org.apache.http").setLevel(
+				java.util.logging.Level.OFF);
+		Web_Client.getOptions().setThrowExceptionOnScriptError(false);
+		// load home page
+		HtmlPage page = Web_Client.getPage("http://www.pge.com/");
+
+		// login
+		List<HtmlForm> forms = page.getForms();
+		HtmlForm loginForm = forms.get(1);
+		HtmlTextInput userName = loginForm.getInputByName("USER");
+		HtmlPasswordInput passWord = loginForm.getInputByName("PASSWORD");
+		userName.setValueAttribute(user);
+		passWord.setValueAttribute(password);
+		HtmlSubmitInput button = page.getFirstByXPath("//*[@id=\"login-btn\"]");
+		HtmlPage page2 = button.click();
+
+		// click on my usage
+		HtmlAnchor myUsageLink = page2.getAnchorByText("My Usage");
+		downloadPage = myUsageLink.click();
+
 	}
 
+	/**
+	 * @param dateOfUse
+	 * @return
+	 * @throws MalformedURLException
+	 * @throws IOException
+	 * @throws NumberFormatException
+	 * @throws ParseException
+	 */
+	public static EnergyForDay getUsage(Date dateOfUse)
+			throws MalformedURLException, IOException, NumberFormatException,
+			ParseException {
+
+		String zipFile = downloadPGEData(dateOfUse);
+		String electricUsage = parsePgeData(zipFile);
+		EnergyForDay production = PGEDataParser.parseFile(electricUsage);
+
+		String tempFolder = PVProperties.getProperty("tempFolder");
+		if (null != tempFolder) {
+			Folder_Name = tempFolder;
+		}
+		FileUtils.deleteQuietly(new File(Folder_Name));
+		return production;
+
+	}
+
+	/**
+	 * @param zipFilePath
+	 * @return
+	 * @throws IOException
+	 */
 	private static String parsePgeData(String zipFilePath) throws IOException {
-		
+
 		String electricUsageFile = null;
 		// buffer for read and write data to file
 		byte[] buffer = new byte[2048];
@@ -70,10 +129,11 @@ public class GetPGEData {
 
 			while (entry != null) {
 				String entryName = entry.getName();
-				if (entryName != null && entryName.startsWith(pgeElectricUsageFilePrefix)) {
-					electricUsageFile = folderName + File.separator + entryName;
+				if (entryName != null
+						&& entryName.startsWith(Pge_Electric_Usage_File_Prefix)) {
+					electricUsageFile = Folder_Name + File.separator + entryName;
 					File file = new File(electricUsageFile);
-	
+
 					// create the directories of the zip directory
 					if (entry.isDirectory()) {
 						File newDir = new File(file.getAbsolutePath());
@@ -103,97 +163,83 @@ public class GetPGEData {
 			zipInput.closeEntry();
 			zipInput.close();
 			fInput.close();
-			
+
 			return electricUsageFile;
-		} catch (IOException e) { 
+		} catch (IOException e) {
 			throw e;
 		}
 
 	}
 
-	private static String downloadPGEData(String user, String password,
-			Date dateToDownload) throws IOException,
-			MalformedURLException {
-		String fileName = null; 
-		String dateToDownloadStr = new SimpleDateFormat("MM/dd/yyyy").format(dateToDownload);
-		String monthToDownloadStr  = new SimpleDateFormat("yyyy-M").format(dateToDownload); // "2015-9"
-		try (final WebClient webClient = new WebClient(BrowserVersion.INTERNET_EXPLORER_11)) {
-			Logger.getLogger("com.gargoylesoftware.htmlunit").setLevel(
-					java.util.logging.Level.OFF);
-			Logger.getLogger("org.apache.http").setLevel(
-					java.util.logging.Level.OFF);
-			webClient.getOptions().setThrowExceptionOnScriptError(false);
-			// load home page
-			HtmlPage page = webClient.getPage("http://www.pge.com/");
+	/**
+	 * @param dateToDownload
+	 * @return
+	 * @throws IOException
+	 * @throws MalformedURLException
+	 */
+	private static String downloadPGEData(Date dateToDownload)
+			throws IOException, MalformedURLException {
 
-			// login
-			List<HtmlForm> forms = page.getForms();
-			HtmlForm loginForm = forms.get(1);
-			HtmlTextInput userName = loginForm.getInputByName("USER");
-			HtmlPasswordInput passWord = loginForm.getInputByName("PASSWORD");
-			userName.setValueAttribute(user);
-			passWord.setValueAttribute(password);
-			HtmlSubmitInput button = page
-					.getFirstByXPath("//*[@id=\"login-btn\"]");
-			HtmlPage page2 = button.click();
-
-			// click on my usage
-			HtmlAnchor myUsageLink = page2.getAnchorByText("My Usage");
-			page2 = myUsageLink.click();
-
-			// click on green button
-			myUsageLink = page2
-					.getAnchorByText("Green Button - Download my data");
-			String myDownloadLink = myUsageLink.getHrefAttribute();
-
-			Pattern pattern = Pattern.compile("/customer/(\\d+)/bill_periods");
-			String customerNumber = null;
-			Matcher matcher = pattern.matcher(myDownloadLink);
-			if (matcher.find()) {
-				customerNumber = matcher.group(1);
-			} else {
-				throw new IOException("Customer number not found in URL: "
-						+ myDownloadLink);
-			}
-
-			page2 = myUsageLink.click();
-
-			File directory = new File(folderName);
-
-			// if the output directory doesn't exist, create it
-			if (!directory.exists())
-				directory.mkdirs();
-
-			// download zip file
-			java.net.URL url = new java.net.URL(
-					"https://pge.opower.com/ei/app/modules/customer/"
-							+ customerNumber + "/energy/download");
-			WebRequest requestSettings = new WebRequest(url, HttpMethod.GET);
-			requestSettings
-					.setRequestParameters(new ArrayList<NameValuePair>());
-			requestSettings.getRequestParameters().add(
-					new NameValuePair("bill", monthToDownloadStr));
-			requestSettings.getRequestParameters().add(
-					new NameValuePair("exportFormat", "CSV_AMI"));
-			requestSettings.getRequestParameters().add(
-					new NameValuePair("csvFrom", dateToDownloadStr));
-			requestSettings.getRequestParameters().add(
-					new NameValuePair("csvTo", dateToDownloadStr));
-			requestSettings.getRequestParameters().add(
-					new NameValuePair("xmlFrom", dateToDownloadStr));
-			requestSettings.getRequestParameters().add(
-					new NameValuePair("xmlTo", dateToDownloadStr));
-
-			// filename
-			UnexpectedPage page3 = webClient.getPage(requestSettings);
-			InputStream is = page3.getWebResponse().getContentAsStream();
-			fileName = folderName + File.separator
-					+ String.format("%1$tY%1$tm%1$td-%1$tR", new Date())
-					+ ".zip";
-			Path zipFilePath = Paths.get(fileName);
-			Files.copy(is, zipFilePath);
-			webClient.closeAllWindows();
+		if (Web_Client == null) {
+			init();
 		}
+
+		// click on green button
+		HtmlAnchor myUsageLink = downloadPage.getAnchorByText("Green Button - Download my data");
+		String myDownloadLink = myUsageLink.getHrefAttribute();
+
+		Pattern pattern = Pattern.compile("/customer/(\\d+)/bill_periods");
+		String customerNumber = null;
+		Matcher matcher = pattern.matcher(myDownloadLink);
+		if (matcher.find()) {
+			customerNumber = matcher.group(1);
+		} else {
+			throw new IOException("Customer number not found in URL: "
+					+ myDownloadLink);
+		}
+
+		HtmlPage page2 = myUsageLink.click();
+
+		File directory = new File(Folder_Name);
+
+		// if the output directory doesn't exist, create it
+		if (!directory.exists())
+			directory.mkdirs();
+
+		// download zip file
+		File_Download_Url = new URL(
+				"https://pge.opower.com/ei/app/modules/customer/"
+						+ customerNumber + "/energy/download");
+
+		String fileName = null;
+		String dateToDownloadStr = new SimpleDateFormat("MM/dd/yyyy")
+				.format(dateToDownload);
+		String monthToDownloadStr = new SimpleDateFormat("yyyy-M")
+				.format(dateToDownload); // "2015-9"
+
+		WebRequest requestSettings = new WebRequest(File_Download_Url,
+				HttpMethod.GET);
+		requestSettings.setRequestParameters(new ArrayList<NameValuePair>());
+		requestSettings.getRequestParameters().add(
+				new NameValuePair("bill", monthToDownloadStr));
+		requestSettings.getRequestParameters().add(
+				new NameValuePair("exportFormat", "CSV_AMI"));
+		requestSettings.getRequestParameters().add(
+				new NameValuePair("csvFrom", dateToDownloadStr));
+		requestSettings.getRequestParameters().add(
+				new NameValuePair("csvTo", dateToDownloadStr));
+		requestSettings.getRequestParameters().add(
+				new NameValuePair("xmlFrom", dateToDownloadStr));
+		requestSettings.getRequestParameters().add(
+				new NameValuePair("xmlTo", dateToDownloadStr));
+
+		// filename
+		UnexpectedPage downloadPage = Web_Client.getPage(requestSettings);
+		InputStream is = downloadPage.getWebResponse().getContentAsStream();
+		fileName = Folder_Name + File.separator
+				+ String.format("%1$tY%1$tm%1$td-%1$tR", dateToDownload) + ".zip";
+		Path zipFilePath = Paths.get(fileName);
+		Files.copy(is, zipFilePath);
 		return fileName;
 	}
 

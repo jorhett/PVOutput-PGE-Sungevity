@@ -19,20 +19,52 @@ import com.droidbytes.beans.EnergyUnit;
 import com.droidbytes.sungevity.jsonobjects.LoginResponse;
 import com.droidbytes.sungevity.jsonobjects.Performance;
 import com.droidbytes.sungevity.jsonobjects.PerformanceData;
+import com.droidbytes.util.PVProperties;
 import com.google.gson.Gson;
 
+/**
+ * 
+ * Get data from Sungevity
+ * @author maggarwal
+ *
+ */
 public class GetSungevityData  {
 
-	public static EnergyForDay getData(String username, String password, Date dateOfProduction) throws Exception {
-		EnergyForDay production = new EnergyForDay();
+	private static WebTarget baseTarget = null;
+	private static LoginResponse loginResponse = null;
+	private static String custProfile = null;
+	
+	/**
+	 * Initalize class and do initial login
+	 * @throws Exception
+	 */
+	private static void init() throws Exception {
 		Client cb = ClientBuilder.newClient();
-		WebTarget baseTarget = cb.target("https://api.sungevity.com/v1");
-		LoginResponse login = getLoginToken(baseTarget, username, password);
-		if (login == null) {
-			login = getLoginToken(baseTarget, username, password);
+		baseTarget = cb.target("https://api.sungevity.com/v1");
+		loginResponse = getLoginToken(baseTarget, PVProperties.getProperty("sungevityUsername"),
+				PVProperties.getProperty("sungevityPassword"));
+		if (loginResponse == null) {
+			loginResponse = getLoginToken(baseTarget,PVProperties.getProperty("sungevityUsername"),
+					PVProperties.getProperty("sungevityPassword"));
 		}
-		String custProfile = getCustomerProfile(baseTarget, login);
-		PerformanceData perfData = getPerformanceData(baseTarget, login, custProfile, dateOfProduction);
+		custProfile = getCustomerProfile(baseTarget, loginResponse);
+	}
+	
+	/**
+	 * main method exposed
+	 * @param dateOfProduction
+	 * @return
+	 * @throws Exception
+	 */
+	public static EnergyForDay getData(Date dateOfProduction) throws Exception {
+		
+		if (baseTarget == null) {
+			init();
+		}
+		
+		EnergyForDay production = new EnergyForDay();
+
+		PerformanceData perfData = getPerformanceData(dateOfProduction);
 		for (Iterator<Performance> perfIter = perfData.getProperties().getPerformance().iterator(); perfIter.hasNext();) {
 			Performance perf = (Performance) perfIter.next();
 			EnergyUnit unit = new EnergyUnit(perf.getDateObj(), perf.getwh()>0?perf.getwh():0, 0);
@@ -42,14 +74,21 @@ public class GetSungevityData  {
 
 	}
 	
-	private static PerformanceData getPerformanceData(WebTarget baseTarget,LoginResponse login,
-			String custProfile, Date dateToFetchData) {
+	/**
+	 * download performance data. reusable for multiple dates
+	 * @param baseTarget
+	 * @param loginResponse
+	 * @param custProfile
+	 * @param dateToFetchData
+	 * @return
+	 */
+	private static PerformanceData getPerformanceData(Date dateToFetchData) {
 		
 		WebTarget getStuff = baseTarget.path("/installation/");
 		getStuff = getStuff.path(custProfile).path("performance");
 		getStuff = getStuff.queryParam("granularity", "hourly").queryParam("from", String.format("%1$tF", dateToFetchData));
 		Invocation.Builder ib = getStuff.request("application/vnd.siren+json");
-		ib.header("Authorization", "Bearer " + login.getAccessToken());
+		ib.header("Authorization", "Bearer " + loginResponse.getAccessToken());
 		Response resp = ib.get();
 
 		Gson gson = new Gson();
@@ -58,6 +97,14 @@ public class GetSungevityData  {
 		return performanceData;
 	}
 
+	/**
+	 * getting login token
+	 * @param baseTarget
+	 * @param username
+	 * @param password
+	 * @return
+	 * @throws Exception
+	 */
 	public static LoginResponse getLoginToken(WebTarget baseTarget, String username, String password) throws Exception {
 		WebTarget getStuff = baseTarget.path("/token");
 		Form form = new Form();
@@ -76,6 +123,14 @@ public class GetSungevityData  {
 		return loginResponse;
 
 	}
+	
+	/**
+	 * Get customer profile string
+	 * @param baseTarget
+	 * @param login
+	 * @return
+	 * @throws Exception
+	 */
 	public static String getCustomerProfile(WebTarget baseTarget, LoginResponse login) throws Exception {
 		WebTarget getStuff = baseTarget.path("/current-user");
 		Invocation.Builder ib = getStuff.request("application/vnd.siren+json");
