@@ -14,7 +14,6 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -22,21 +21,22 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.http.client.ClientProtocolException;
 
 import com.droidbytes.beans.EnergyForDay;
 import com.droidbytes.pge.PGEDataParser;
 import com.droidbytes.util.PVProperties;
 import com.gargoylesoftware.htmlunit.BrowserVersion;
 import com.gargoylesoftware.htmlunit.HttpMethod;
+import com.gargoylesoftware.htmlunit.NicelyResynchronizingAjaxController;
 import com.gargoylesoftware.htmlunit.UnexpectedPage;
 import com.gargoylesoftware.htmlunit.WebClient;
 import com.gargoylesoftware.htmlunit.WebRequest;
+import com.gargoylesoftware.htmlunit.WebWindow;
 import com.gargoylesoftware.htmlunit.html.HtmlAnchor;
+import com.gargoylesoftware.htmlunit.html.HtmlButton;
 import com.gargoylesoftware.htmlunit.html.HtmlForm;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
 import com.gargoylesoftware.htmlunit.html.HtmlPasswordInput;
-import com.gargoylesoftware.htmlunit.html.HtmlSubmitInput;
 import com.gargoylesoftware.htmlunit.html.HtmlTextInput;
 import com.gargoylesoftware.htmlunit.util.NameValuePair;
 
@@ -54,8 +54,9 @@ public class GetPGEData {
 
 	/**
 	 * @throws IOException
+	 * @throws InterruptedException 
 	 */
-	private static void init() throws IOException {
+	private static void init() throws IOException, InterruptedException {
 
 		String user = PVProperties.getProperty("pgeUserName");
 		String password = PVProperties.getProperty("pgePassword");
@@ -66,21 +67,34 @@ public class GetPGEData {
 		Logger.getLogger("org.apache.http").setLevel(
 				java.util.logging.Level.OFF);
 		Web_Client.getOptions().setThrowExceptionOnScriptError(false);
+		//Web_Client.setAjaxController(new NicelyResynchronizingAjaxController());
 		// load home page
 		HtmlPage page = Web_Client.getPage("http://www.pge.com/");
 
 		// login
-		List<HtmlForm> forms = page.getForms();
-		HtmlForm loginForm = forms.get(1);
-		HtmlTextInput userName = loginForm.getInputByName("USER");
-		HtmlPasswordInput passWord = loginForm.getInputByName("PASSWORD");
+		HtmlForm loginForm = page.getFormByName("login-form");
+		HtmlTextInput userName = loginForm.getInputByName("username");
+		HtmlPasswordInput passWord = loginForm.getInputByName("password");
 		userName.setValueAttribute(user);
 		passWord.setValueAttribute(password);
-		HtmlSubmitInput button = page.getFirstByXPath("//*[@id=\"login-btn\"]");
-		HtmlPage page2 = button.click();
+		HtmlButton button = loginForm.getButtonByName("btnLogin");
+		
+		WebWindow window = page.getEnclosingWindow();
 
-		// click on my usage
-		HtmlAnchor myUsageLink = page2.getAnchorByText("My Usage");
+		button.click();
+
+		int PAGE_RETRY = 100; 
+		for (int i = 0; !page.asXml().contains("utag-usage-and-ways-to-save-my-usage") && i < PAGE_RETRY; i++) {
+	        try {
+	            Thread.sleep(500);
+	            page = (HtmlPage)window.getEnclosedPage();
+	        } catch (Exception e) {
+	            e.printStackTrace();
+	        }
+	    }
+		
+		//click on my usage
+		HtmlAnchor myUsageLink = page.getAnchorByHref("https://www.pge.com/myenergyweb/appmanager/pge/customer/contextual/myusage");
 		downloadPage = myUsageLink.click();
 
 	}
@@ -92,10 +106,11 @@ public class GetPGEData {
 	 * @throws IOException
 	 * @throws NumberFormatException
 	 * @throws ParseException
+	 * @throws InterruptedException 
 	 */
 	public static EnergyForDay getUsage(Date dateOfUse)
 			throws MalformedURLException, IOException, NumberFormatException,
-			ParseException {
+			ParseException, InterruptedException {
 
 		String zipFile = downloadPGEData(dateOfUse);
 		String electricUsage = parsePgeData(zipFile);
@@ -176,9 +191,10 @@ public class GetPGEData {
 	 * @return
 	 * @throws IOException
 	 * @throws MalformedURLException
+	 * @throws InterruptedException 
 	 */
 	private static String downloadPGEData(Date dateToDownload)
-			throws IOException, MalformedURLException {
+			throws IOException, MalformedURLException, InterruptedException {
 
 		if (Web_Client == null) {
 			init();
