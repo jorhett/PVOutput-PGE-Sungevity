@@ -19,6 +19,15 @@ public class EnergyForDay {
 		Map<String, EnergyUnit> treeMap = new TreeMap<String, EnergyUnit>(dateTimeToUnitMap);
 		return treeMap.values();
 	}
+	
+	public long totalConsumptionForDay() {
+		long totalWh = 0;
+		for (Iterator<EnergyUnit> unitIter = getSolarProdUnits().iterator(); unitIter.hasNext();) {
+			EnergyUnit solarProductionUnit = (EnergyUnit) unitIter.next();
+			totalWh +=solarProductionUnit.getWattHourConsumed();
+		}
+		return totalWh;
+	}
 
 	public void setSolarProdUnits(Collection<EnergyUnit> solarProdUnits) {
 		for (Iterator<EnergyUnit> unitCollection = solarProdUnits.iterator(); unitCollection.hasNext();) {

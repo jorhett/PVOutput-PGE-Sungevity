@@ -1,11 +1,13 @@
 package com.droidbytes;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Calendar;
 import java.util.Date;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.http.HttpHeaders;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -16,7 +18,7 @@ import org.apache.http.impl.client.HttpClients;
 
 import com.droidbytes.beans.BeanMergeUtil;
 import com.droidbytes.beans.EnergyForDay;
-import com.droidbytes.util.FileUpdate;
+import com.droidbytes.google.spreadsheet.AccessGoogleSpreadsheet;
 import com.droidbytes.util.PVProperties;
 import com.droidbytes.webclient.GetPGEData;
 import com.droidbytes.webclient.GetSungevityData;
@@ -28,24 +30,31 @@ import com.droidbytes.webclient.GetSungevityData;
 public class RecordPVOutput {
 
 	public static void main(String[] args) throws Exception {
-		
+
 		Calendar start = Calendar.getInstance();
-		start.setTime(FileUpdate.readLastDate());
+		//start.setTime(FileUpdate.readLastDate());
+		start.setTime(AccessGoogleSpreadsheet.getLastDate(PVProperties.getProperty("spreadSheetName"),
+					PVProperties.getProperty("workSheetName"),
+					PVProperties.getProperty("authFilePath")));
 
 		Calendar end = Calendar.getInstance();
 		end.setTime(new Date());
 
 		try {
-			while( !start.after(end)){
-			    Date targetDay = start.getTime();
-			    System.out.println("Processing for date : " + targetDay);
-			    publishForDate(targetDay);
-			    start.add(Calendar.DATE, 1);
+			while (!start.after(end)) {
+				start.add(Calendar.DATE, 1);
+				Date targetDay = start.getTime();
+				System.out.println("Processing for date : " + targetDay);
+				publishForDate(targetDay);
 			}
 		} catch (Exception e) {
 			// write out last date if exception occurs
+			System.out.println("Error: " + e.getLocalizedMessage());
 			System.out.println("Stopping at date : " + start.getTime());
-			FileUpdate.writeFileBytes(start.getTime());
+			//FileUpdate.writeFileBytes(start.getTime());
+		} finally {
+			String tempFolder = PVProperties.getProperty("tempFolder");
+			FileUtils.deleteQuietly(new File(tempFolder));
 		}
 	}
 
@@ -54,9 +63,9 @@ public class RecordPVOutput {
 	 * @throws Exception
 	 */
 	public static void publishForDate(Date dateToProcess) throws Exception {
-		
+
 		EnergyForDay netConsumed = GetPGEData.getUsage(dateToProcess);
-	
+
 		EnergyForDay produced = GetSungevityData.getData(dateToProcess);
 
 		EnergyForDay consolidated = BeanMergeUtil.mergeData(netConsumed,

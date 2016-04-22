@@ -30,6 +30,9 @@ public class PGEDataParser {
 						0, Math.round(Double.parseDouble(items.get(4)) * 1000));
 				pgeData.addSolarProductionUnit(su);
 			}
+			if ("There is no available usage data for this service at this time. Please check back at a later date to download usage data.".equals(items.get(0))) {
+				throw new ParseException("No data in file", 0);
+			}
 		}
 		br.close();
 		

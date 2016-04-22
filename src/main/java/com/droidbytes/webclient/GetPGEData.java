@@ -10,6 +10,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -23,11 +24,11 @@ import java.util.zip.ZipInputStream;
 import org.apache.commons.io.FileUtils;
 
 import com.droidbytes.beans.EnergyForDay;
+import com.droidbytes.google.spreadsheet.AccessGoogleSpreadsheet;
 import com.droidbytes.pge.PGEDataParser;
 import com.droidbytes.util.PVProperties;
 import com.gargoylesoftware.htmlunit.BrowserVersion;
 import com.gargoylesoftware.htmlunit.HttpMethod;
-import com.gargoylesoftware.htmlunit.NicelyResynchronizingAjaxController;
 import com.gargoylesoftware.htmlunit.UnexpectedPage;
 import com.gargoylesoftware.htmlunit.WebClient;
 import com.gargoylesoftware.htmlunit.WebRequest;
@@ -61,12 +62,16 @@ public class GetPGEData {
 		String user = PVProperties.getProperty("pgeUserName");
 		String password = PVProperties.getProperty("pgePassword");
 
-		Web_Client = new WebClient(BrowserVersion.INTERNET_EXPLORER_11);
 		Logger.getLogger("com.gargoylesoftware.htmlunit").setLevel(
 				java.util.logging.Level.OFF);
 		Logger.getLogger("org.apache.http").setLevel(
 				java.util.logging.Level.OFF);
+
+		//Web_Client = new WebClient(BrowserVersion.INTERNET_EXPLORER_11);
+		Web_Client = new WebClient(BrowserVersion.CHROME);
+		Web_Client.getOptions().setCssEnabled(false);
 		Web_Client.getOptions().setThrowExceptionOnScriptError(false);
+		Web_Client.setJavaScriptTimeout(15000);
 		//Web_Client.setAjaxController(new NicelyResynchronizingAjaxController());
 		// load home page
 		HtmlPage page = Web_Client.getPage("http://www.pge.com/");
@@ -115,12 +120,19 @@ public class GetPGEData {
 		String zipFile = downloadPGEData(dateOfUse);
 		String electricUsage = parsePgeData(zipFile);
 		EnergyForDay production = PGEDataParser.parseFile(electricUsage);
-
-		String tempFolder = PVProperties.getProperty("tempFolder");
-		if (null != tempFolder) {
-			Folder_Name = tempFolder;
+		
+		// recrod in worksheet
+		try {
+			long netDeltaForDay = production.totalConsumptionForDay();
+			AccessGoogleSpreadsheet.writeEntry(dateOfUse, netDeltaForDay,
+					PVProperties.getProperty("spreadSheetName"),
+					PVProperties.getProperty("workSheetName"),
+					PVProperties.getProperty("authFilePath"));
+			
+		} catch (Exception e) {
+			System.out.println("Error writing data to google spreadhseet. " + e.getLocalizedMessage());
 		}
-		FileUtils.deleteQuietly(new File(Folder_Name));
+
 		return production;
 
 	}
@@ -201,6 +213,16 @@ public class GetPGEData {
 		}
 
 		// click on green button
+		
+		int PAGE_RETRY = 100;
+		for (int i = 0; !downloadPage.asXml().contains("Green Button - Download my data") && i < PAGE_RETRY; i++) {
+	        try {
+	            Thread.sleep(500);
+	        } catch (Exception e) {
+	            e.printStackTrace();
+	        }
+	    }
+		
 		HtmlAnchor myUsageLink = downloadPage.getAnchorByText("Green Button - Download my data");
 		String myDownloadLink = myUsageLink.getHrefAttribute();
 
@@ -255,7 +277,7 @@ public class GetPGEData {
 		fileName = Folder_Name + File.separator
 				+ String.format("%1$tY%1$tm%1$td-%1$tR", dateToDownload) + ".zip";
 		Path zipFilePath = Paths.get(fileName);
-		Files.copy(is, zipFilePath);
+		Files.copy(is, zipFilePath, StandardCopyOption.REPLACE_EXISTING);
 		return fileName;
 	}
 
