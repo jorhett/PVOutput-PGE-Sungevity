@@ -4,8 +4,10 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.LinkedHashMap;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.http.HttpHeaders;
@@ -41,11 +43,9 @@ public class RecordPVOutput {
 		end.setTime(new Date());
 
 		try {
-			while (!start.after(end)) {
+			if (!start.after(end)) {
 				start.add(Calendar.DATE, 1);
-				Date targetDay = start.getTime();
-				System.out.println("Processing for date : " + targetDay);
-				publishForDate(targetDay);
+				publishForDate(start, end);
 			}
 		} catch (Exception e) {
 			// write out last date if exception occurs
@@ -62,16 +62,27 @@ public class RecordPVOutput {
 	 * @param dateToProcess
 	 * @throws Exception
 	 */
-	public static void publishForDate(Date dateToProcess) throws Exception {
+	public static void publishForDate(Calendar start, Calendar end) throws Exception {
 
-		EnergyForDay netConsumed = GetPGEData.getUsage(dateToProcess);
+		LinkedHashMap<String, EnergyForDay> allConsumed = GetPGEData.getUsage(start, end);
 
-		EnergyForDay produced = GetSungevityData.getData(dateToProcess);
-
-		EnergyForDay consolidated = BeanMergeUtil.mergeData(netConsumed,
-				produced);
-		publishPVOutput(consolidated, PVProperties.getProperty("pvOutputKey"),
-				PVProperties.getProperty("pvOutputSystemId"));
+		allConsumed.forEach((dateStr, netConsumed) -> {
+			try {
+				SimpleDateFormat dt = new SimpleDateFormat("yyyy-MM-dd"); 
+				Date dateToProcess = dt.parse(dateStr); 
+				 
+				EnergyForDay produced = GetSungevityData.getData(dateToProcess);
+				EnergyForDay consolidated = BeanMergeUtil.mergeData(netConsumed,
+						produced);
+	
+					publishPVOutput(consolidated, PVProperties.getProperty("pvOutputKey"),
+							PVProperties.getProperty("pvOutputSystemId"));
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		});
+		
 
 	}
 

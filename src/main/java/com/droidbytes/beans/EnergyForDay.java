@@ -75,4 +75,10 @@ public class EnergyForDay {
 		return sb.toString();
 	}
 	
+	public EnergyForDay clone() {
+		EnergyForDay retVal = new EnergyForDay();
+		retVal.dateTimeToUnitMap.putAll(dateTimeToUnitMap);
+		return retVal;
+	}
+	
 }
