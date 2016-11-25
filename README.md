@@ -1,6 +1,9 @@
 # PVOutput-PGE-Sungevity
 Code to pull data from PGE and Sungevity and Push to PVOutput so you can see both, your solar production and usage on same place.
 
+
+This code depends on another project https://github.com/qwertangel/getPGEUsageData which uses casperjs (headless browser) to log into PGE's website and download usage data. 
+
 Steps to use
 
 1. Make sure you can login into your PG&E account and have your username, password. (http://www.pge.com/)
@@ -16,5 +19,4 @@ Steps to use
 That's it. Then you can run com.droidbytes.RecordPVOutput. 
 
 Check the wiki at https://github.com/qwertangel/PVOutput-PGE-Sungevity/wiki
-
 
