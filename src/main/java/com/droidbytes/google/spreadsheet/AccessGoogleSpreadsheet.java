@@ -47,7 +47,7 @@ public class AccessGoogleSpreadsheet {
 //		lhm.put("Delta", "12");
 //		lhm.put("Reading", "120");
 		//writeDataToSpreadsheet(lhm, "Electric Meter", "Readings", param);
-		getLastDate("Electric Meter", "Readings", param);
+		System.out.println(getLastDate("Electric Meter", "Readings", param));
 		
 	}
 

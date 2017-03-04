@@ -138,8 +138,8 @@ public class GetPGEData {
 
 		String user = PVProperties.getProperty("pgeUserName");
 		String password = PVProperties.getProperty("pgePassword");
-		String startdateStr = new SimpleDateFormat("MM/dd/yyyy").format(start.getTime());
-		String enddateStr = new SimpleDateFormat("MM/dd/yyyy").format(end.getTime());
+		String startdateStr = new SimpleDateFormat("yyyy-MM-dd").format(start.getTime());
+		String enddateStr = new SimpleDateFormat("yyyy-MM-dd").format(end.getTime());
 		String fileName = Folder_Name + File.separator + String.format("%1$tY%1$tm%1$td-%1$tR", start) + ".zip";
 
 		ProcessBuilder pb = new ProcessBuilder(
